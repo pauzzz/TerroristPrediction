@@ -149,8 +149,13 @@ incidentGraph(2000,2009)
 incidentGraph(2010,2017)
 
 # We can see the main groups responsible for a large portion of the number of
-# known group name incidents, over 18% by decade. Let's see which regions these
-# incidents from the top ten are performed in.
+# known group name incidents, over 18% by decade. Between 2000 and 2009, there
+# seems to be a much greater variety of terrorist groups performing attacks.
+# This might be because of the rapid rise in news reporting on terrorism in
+# the US and other developed countries. We can perform A/B testing on dates
+# before and after 9/11/2001 to see if this event triggered a larger number of
+# people to incite terror attacks around the world. Let's see which regions
+# these incidents from the top ten are performed in.
 
 def map_decade(year1,year2):
     dec=df.loc[df['iyear'].between(year1,year2)]
@@ -183,63 +188,90 @@ map_decade(2010,2017) #adjust years to what you need
 # Create function to remove punctuation, reduce whitespace to single space, lowercase, and
 # lemmatize text data
 
+# The following code snippet has been run and has been saved to
+# save_lemmatized.csv. It took a whole night to run so I've commented it out
+# for simplicity's sake.
 
-def lemmatize_text(text):
-    '''Lemmatize text.'''
-    wnl=WordNetLemmatizer()
-    w_tokenizer = nltk.tokenize.WhitespaceTokenizer()
-    return [wnl.lemmatize(w,'v') for w in w_tokenizer.tokenize(text)]
-
-
-def text_preprocess(data):
-    '''Preprocesses text data in specified columns in dataframe.'''
-    text_df=data.astype('U')
-    lem_text=pd.DataFrame()
-
-    for col in text_df.columns:
-        print('working... now on %s' %text_df[col].name)
-        reg1=re.compile('[,\.!?"($)@:;~/-]')
-        reg2=re.compile('\d+')
-        reg3=re.compile('\s+')
-        for row in range(len(text_df[col])):
-            if text_df[col][row]!='NaN':
-                text_df[col][row]=reg1.sub(' ', text_df[col][row])
-                text_df[col][row]=reg2.sub(' ', text_df[col][row])
-                text_df[col][row]=reg3.sub(' ', text_df[col][row]).strip()
-                text_df[col][row]=text_df[col][row].lower()
-
-        lem_text[col]=text_df[col].apply(lemmatize_text)
-
-        for row in range(len(lem_text[col])):
-            if lem_text[col][row]!=['nan']:
-                text_in_row=' '.join(lem_text[col][row])
-                lem_text.loc[row, col]=text_in_row
-            else:
-                lem_text.loc[row,col]=np.nan
-    return lem_text
-
-text_cols=df[['summary','motive','addnotes']]
-lem_text=text_preprocess(text_cols)
+#def lemmatize_text(text):
+#    '''Lemmatize text.'''
+#    wnl=WordNetLemmatizer()
+#    w_tokenizer = nltk.tokenize.WhitespaceTokenizer()
+#    return [wnl.lemmatize(w,'v') for w in w_tokenizer.tokenize(text)]
 
 
-# Let's factorize our group_id to prepare for model creation.
+
+#def text_preprocess(data):
+#    '''Preprocesses text data in specified columns in dataframe.'''
+#    text_df=data.astype('U')
+#    lem_text=pd.DataFrame()
+#
+#    for col in text_df.columns:
+#        print('working... now on %s' %text_df[col].name)
+#        reg1=re.compile('[,\.!?"($)@:;~/-]')
+#        reg2=re.compile('\d+')
+#        reg3=re.compile('\s+')
+#        for row in range(len(text_df[col])):
+#            if text_df[col][row]!='NaN':
+#                text_df[col][row]=reg1.sub(' ', text_df[col][row])
+#                text_df[col][row]=reg2.sub(' ', text_df[col][row])
+#                text_df[col][row]=reg3.sub(' ', text_df[col][row]).strip()
+#                text_df[col][row]=text_df[col][row].lower()
+#
+#        lem_text[col]=text_df[col].apply(lemmatize_text)
+#
+#        for row in range(len(lem_text[col])):
+#            if lem_text[col][row]!=['nan']:
+#                text_in_row=' '.join(lem_text[col][row])
+#                lem_text.loc[row, col]=text_in_row
+#            else:
+#                lem_text.loc[row,col]=np.nan
+#    return lem_text
+#
+#text_cols=df[['summary','motive','addnotes']][0:181691]
+#lem_text=text_preprocess(text_cols)
+#lem_text.to_csv('save_lemmatized.csv')
+lem_text=pd.read_csv('save_lemmatized.csv',index_col=0)
+
+# Let's factorize our group_id to prepare for model creation. Save dictionaries
 df['group_id'] = df['gname'].factorize()[0]
-gname_to_id=df[['gname', 'group_id']].drop_duplicates().sort_values('group_id')
-gname_to_id_dict=dict(gname_to_id.values)
-id_to_gname_dict=dict(gname_to_id[['gname','group_id']].values)
+gname_id_df=df[['gname', 'group_id']].drop_duplicates().sort_values('group_id')
+gname_to_id_dict=dict(gname_id_df.values)
+id_to_gname_dict=dict(gname_id_df[['group_id','gname']].values)
 
-#see if chi2 gives best correlated words
-N = 2
-for gname, group_id in sorted(gname_to_id.items()):
-  features_chi2 = chi2(features, labels == group_id)
-  indices = np.argsort(features_chi2[0])
-  feature_names = np.array(tfidf.get_feature_names())[indices]
-  unigrams = [v for v in feature_names if len(v.split(' ')) == 1]
-  bigrams = [v for v in feature_names if len(v.split(' ')) == 2]
-  print("# '{}':".format(gname))
-  print("  . Most correlated unigrams:\n. {}".format('\n. '.join(unigrams[-N:])))
-  print("  . Most correlated bigrams:\n. {}".format('\n. '.join(bigrams[-N:])))
 
+
+#join text for tfidf
+
+lem_text['joined']=lem_text['summary'].map(str)+' '+lem_text['motive'].map(str)
+lem_text['joined']+=' '+lem_text['addnotes'].map(str)
+
+lem_text['joined']=lem_text['joined'].map(lambda x: re.sub('nan', '', x))
+
+#tfidf
+tfidf = TfidfVectorizer(stop_words='english', max_features=7000,
+                        ngram_range=(1,2), norm='l2')
+features = tfidf.fit_transform(lem_text.joined.astype('U')).toarray()
+labels = df.group_id
+features.shape
+
+
+# Perform chi2 to see top 3 unigrams and bigrams from tfidf vectorizer.
+counter=0
+for gname, group_id in sorted(gname_to_id_dict.items()):
+    counter+=1
+    if counter == 6:
+        break
+    else:
+        features_chi2 = chi2(features, labels == group_id)
+        indices = np.argsort(features_chi2[0])
+        feature_names = np.array(tfidf.get_feature_names())[indices]
+        unigrams = [v for v in feature_names if len(v.split(' ')) == 1]
+        bigrams= [v for v in feature_names if len(v.split(' ')) ==2]
+        print("# '{}':".format(gname))
+        print("  . Most correlated unigrams:\n. {}"
+              .format('\n. '.join(unigrams[-3:])))
+        print("  . Most correlated bigrams:\n. {}"
+              .format('\n. '.join(bigrams[-3:])))
 
 # Let's also separate the known and unknown data into a pseudo-train and test
 # set. Test set is unknown gname and pseudo-train set is known gname
@@ -254,10 +286,6 @@ y_train=unknown.drop([x for x in unknown.columns if df[x].dtype=='object'],
 list_99=['nperpcap', 'nhostkid', 'nhours', 'nhostkid', 'nperps',
          'ransomamtus', 'ransompaidus', 'nreleased']
 
-x_train.corr()
-sns.heatmap(x_train.corr())
-plt.show()
-
 # Now we can do preprocessing
 
 columns=x_train.columns
@@ -266,6 +294,10 @@ imp=Imputer(missing_values=np.nan,strategy='most_frequent', axis=1)
 x_train=imp.fit_transform(x_train)
 x_train=pd.DataFrame(x_train)
 x_train.columns=columns
+#corr between columns xtrain
+x_train.corr()
+sns.heatmap(x_train.corr())
+plt.show()
 
 columns=y_train.columns
 y_train=y_train.replace([-9,-99], np.nan)
