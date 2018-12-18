@@ -380,6 +380,7 @@ x_train, x_test, y_train, y_test= train_test_split(
 
 #clf=xgb.XGBClassifier(**param)
 #clf.fit(x_train,y_train, eval_metric='auc', verbose=True)
+#joblib.dump(clf, 'clf_model.pkl', compress=True)
 
 clf=joblib.load('clf_model.pkl')
 y_pre=clf.predict(x_test)
@@ -388,7 +389,7 @@ print(classification_report(y_test, y_pre))
 
 real_preds=clf.predict(unknown.drop(['group_id'],axis=1))
 
-joblib.dump(clf, 'clf_model.pkl', compress=True)
+
 #joblib.load('clf_model.pkl') # load it later
 # Remove for now. CV is weird.
 #
